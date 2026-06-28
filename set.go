@@ -20,7 +20,7 @@ func MakeSet[V cmp.Ordered]() Set[V] {
 
 // Has returns true if the set contains the value, and returns false if it does not.
 func (s Set[V]) Has(value V) bool {
-	_, exists := s.root.Get(value, maphash.Comparable(s.hashSeed, value), 1)
+	_, exists := s.root.Get(value, s.hashSeed)
 	return exists
 }
 
@@ -28,7 +28,7 @@ func (s Set[V]) Has(value V) bool {
 // Returns a copy of the set without mutating the original even if an identical
 // value already existed in the set.
 func (m Set[V]) Insert(value V) Set[V] {
-	newRoot, isNewKey := m.root.Insert(value, maphash.Comparable(m.hashSeed, value), struct{}{}, 1, m.hashSeed)
+	newRoot, isNewKey := m.root.Insert(value, struct{}{}, m.hashSeed)
 
 	result := Set[V]{
 		hashSeed: m.hashSeed,
@@ -47,7 +47,7 @@ func (m Set[V]) Insert(value V) Set[V] {
 // If the value exists, returns a copy of the set without mutating the original.
 // If the value doesn't exist, returns this set without mutating.
 func (m Set[V]) Delete(value V) Set[V] {
-	newRoot, deleted := m.root.Delete(value, maphash.Comparable(m.hashSeed, value), 1)
+	newRoot, deleted := m.root.Delete(value, m.hashSeed)
 	if !deleted {
 		return m
 	}

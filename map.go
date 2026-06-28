@@ -28,14 +28,14 @@ func MakeMap[K cmp.Ordered, V any]() Map[K, V] {
 // If the key exists, returns the value and true.
 // If the key doesn't exist, returns the zero value and false.
 func (m Map[K, V]) Get(key K) (V, bool) {
-	return m.root.Get(key, maphash.Comparable(m.hashSeed, key), 1)
+	return m.root.Get(key, m.hashSeed)
 }
 
 // Set associates the value with the key.
 // Returns a copy of the map without mutating the original even if an identical
 // key/value pair already existed in the map.
 func (m Map[K, V]) Set(key K, value V) Map[K, V] {
-	newRoot, isNewKey := m.root.Insert(key, maphash.Comparable(m.hashSeed, key), value, 1, m.hashSeed)
+	newRoot, isNewKey := m.root.Insert(key, value, m.hashSeed)
 
 	result := Map[K, V]{
 		hashSeed: m.hashSeed,
@@ -54,7 +54,7 @@ func (m Map[K, V]) Set(key K, value V) Map[K, V] {
 // If the key exists, returns a copy of the map without mutating the original.
 // If the key doesn't exist, returns this map without mutating.
 func (m Map[K, V]) Delete(key K) Map[K, V] {
-	newRoot, deleted := m.root.Delete(key, maphash.Comparable(m.hashSeed, key), 1)
+	newRoot, deleted := m.root.Delete(key, m.hashSeed)
 	if !deleted {
 		return m
 	}

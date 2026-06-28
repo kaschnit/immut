@@ -15,13 +15,23 @@ const (
 
 // KVNode is a CHAMP key-value node with branching factor of 32.
 type KVNode[K cmp.Ordered, V any] struct {
+	// entryMap is a bitmap indicating which of the 32 entries exist.
 	entryMap uint32
+	// childMap is a bitmap indicating which of the 32 children exist.
 	childMap uint32
-	entries  []kvEntry[K, V]
+	// entries are the key-value pair data items this node contains.
+	entries []kvEntry[K, V]
+	// children are the child nodes of this node.
 	children []*KVNode[K, V]
 }
 
-func (node *KVNode[K, V]) Get(key K, hash uint64, depth int) (V, bool) {
+func (node *KVNode[K, V]) Get(key K, hashSeed maphash.Seed) (V, bool) {
+	return node.get(key, maphash.Comparable(hashSeed, key), 1)
+}
+
+// Get gets the key with the given hash from this node.
+// The key is looked up from descendent nodes if necessary.
+func (node *KVNode[K, V]) get(key K, hash uint64, depth int) (V, bool) {
 	if depth == maxDepth {
 		// Max depth, must linear search to handle full hash collisions.
 		// Iterate all entries and find matching key if there is any.
@@ -57,7 +67,7 @@ func (node *KVNode[K, V]) Get(key K, hash uint64, depth int) (V, bool) {
 		// Get index of child.
 		index := getIndex(node.childMap, bitmapPos)
 		// Recurse on child.
-		return node.children[index].Get(key, hash, depth+1)
+		return node.children[index].get(key, hash, depth+1)
 	}
 
 	// Key did not match (no entry or children).
@@ -65,7 +75,11 @@ func (node *KVNode[K, V]) Get(key K, hash uint64, depth int) (V, bool) {
 	return zero, false
 }
 
-func (node *KVNode[K, V]) Insert(key K, hash uint64, value V, depth int, hashSeed maphash.Seed) (KVNode[K, V], bool) {
+func (node *KVNode[K, V]) Insert(key K, value V, hashSeed maphash.Seed) (KVNode[K, V], bool) {
+	return node.insert(key, value, maphash.Comparable(hashSeed, key), hashSeed, 1)
+}
+
+func (node *KVNode[K, V]) insert(key K, value V, hash uint64, hashSeed maphash.Seed, depth int) (KVNode[K, V], bool) {
 	if depth == maxDepth {
 		// Max depth, do not use hashing here to avoid hash collision.
 		// Check for existing entry to overwrite.
@@ -131,8 +145,8 @@ func (node *KVNode[K, V]) Insert(key K, hash uint64, value V, depth int, hashSee
 
 		// Split existing entry into a child branch
 		child := KVNode[K, V]{}
-		child, _ = child.Insert(existingEntry.key, maphash.Comparable(hashSeed, existingEntry.key), existingEntry.value, depth+1, hashSeed)
-		child, _ = child.Insert(key, hash, value, depth+1, hashSeed)
+		child, _ = child.insert(existingEntry.key, existingEntry.value, maphash.Comparable(hashSeed, existingEntry.key), hashSeed, depth+1)
+		child, _ = child.insert(key, value, hash, hashSeed, depth+1)
 
 		newChildMap := node.childMap | bitmapPos
 		childIndex := getIndex(newChildMap, bitmapPos)
@@ -158,7 +172,7 @@ func (node *KVNode[K, V]) Insert(key K, hash uint64, value V, depth int, hashSee
 	if node.childMap&bitmapPos != 0 {
 		// Child exists.
 		childIndex := getIndex(node.childMap, bitmapPos)
-		child, isNewKey := node.children[childIndex].Insert(key, hash, value, depth+1, hashSeed)
+		child, isNewKey := node.children[childIndex].insert(key, value, hash, hashSeed, depth+1)
 
 		// Mutating an existing child path: structural sharing for entries,
 		// and we only allocate a new children slice of the exact same size to update the pointer.
@@ -193,7 +207,11 @@ func (node *KVNode[K, V]) Insert(key K, hash uint64, value V, depth int, hashSee
 	return result, true
 }
 
-func (node *KVNode[K, V]) Delete(key K, hash uint64, depth int) (KVNode[K, V], bool) {
+func (node *KVNode[K, V]) Delete(key K, hashSeed maphash.Seed) (KVNode[K, V], bool) {
+	return node.delete(key, maphash.Comparable(hashSeed, key), 1)
+}
+
+func (node *KVNode[K, V]) delete(key K, hash uint64, depth int) (KVNode[K, V], bool) {
 	if depth == maxDepth {
 		for i := range node.entries {
 			if node.entries[i].key == key {
@@ -241,7 +259,7 @@ func (node *KVNode[K, V]) Delete(key K, hash uint64, depth int) (KVNode[K, V], b
 	if node.childMap&bitmapPos != 0 {
 		childIndex := getIndex(node.childMap, bitmapPos)
 
-		child, deleted := node.children[childIndex].Delete(key, hash, depth+1)
+		child, deleted := node.children[childIndex].delete(key, hash, depth+1)
 		if !deleted {
 			return KVNode[K, V]{}, false
 		}
