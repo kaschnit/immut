@@ -1,6 +1,6 @@
-# kaschnit-scheduler
+# kaschnit/immut
 
-Immutable data structure library focused on high performance.
+Immutable Go data structure library focused on high performance.
 
 ## Data structures
 
