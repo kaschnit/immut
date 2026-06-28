@@ -16,8 +16,8 @@ const (
 // a bitmap representing a node's items at the given depth.
 func getBitmapPos(hash uint64, depth int) uint32 {
 	// There are branchingFactorBits bits per level.
-	// At depth 1, we want the first branchingFactorBits.
-	// At depth 2, we want the next branchingFactorBits.
+	// At depth 1, we want the first branchingFactorBits bits.
+	// At depth 2, we want the next branchingFactorBits bits.
 	// And so on. So multiply branchingFactorBits by depth.
 	rShiftForDepth := depth * branchingFactorBits
 
