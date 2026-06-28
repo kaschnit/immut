@@ -15,10 +15,10 @@ const (
 // getBitmapPos gets the position of the hash's item within
 // a bitmap representing a node's items at the given depth.
 func getBitmapPos(hash uint64, depth int) uint32 {
-	// There are branchingFactor64Bits bits per level.
-	// At depth 1, we want the first branchingFactor64Bits.
-	// At depth 2, we want the next branchingFactor64Bits.
-	// And so on. So multiply branchingFactor64Bits by depth.
+	// There are branchingFactorBits bits per level.
+	// At depth 1, we want the first branchingFactorBits.
+	// At depth 2, we want the next branchingFactorBits.
+	// And so on. So multiply branchingFactorBits by depth.
 	rShiftForDepth := depth * branchingFactorBits
 
 	// Extract the bits for the given depth.
@@ -26,7 +26,7 @@ func getBitmapPos(hash uint64, depth int) uint32 {
 	// Apply mask to clear any bits to the left of them.
 	bitsForDepth := (hash >> rShiftForDepth) & branchingFactorBitsMask
 
-	// Get the position within a 64-bit bitmap for the number that these bits represent.
+	// Get the position within a 32-bit bitmap for the number that these bits represent.
 	return uint32(1) << bitsForDepth
 }
 
@@ -36,8 +36,10 @@ func getIndex(bitmap, bitmapPos uint32) int {
 	// For example, if bitmapPos is 0b1000, bitmapPos-1 is 0b0111.
 	// This can be used to mask all bits before the given position.
 	mask := bitmapPos - 1
+
 	// Extract bits lower than (to the right of) bitmapPos.
 	bitsLowerThanPos := bitmap & mask
+
 	// Count the number of lower bits.
 	// This provides the index into the slice of items in the node.
 	return bits.OnesCount32(bitsLowerThanPos)
