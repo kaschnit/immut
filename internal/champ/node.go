@@ -10,27 +10,37 @@ const (
 	// This is 13 because CHAMP uses 64 bit hash, and 5 bits are used per level.
 	// The 13th level uses only 4 bits since the previous levels use a total of 60 bits,
 	// leaving only 4 for the 13th level.
+	// Nodes at maxDepth are collision nodes (first 60 or more of the 64 bits of the hash collide).
 	maxDepth = 13
 )
 
 // KVNode is a CHAMP key-value node with branching factor of 32.
+//
+// Nodes at max depth are treated as collision nodes. Collision nodes use the same KVNode struct
+// but don't use typical CHAMP techniques; entries in collision nodes are just maintained in sorted
+// order and not tracked in bitmaps. Collision nodes have no children.
 type KVNode[K cmp.Ordered, V any] struct {
 	// entryMap is a bitmap indicating which of the 32 entries exist.
+	// A collision node always has entryMap==0.
 	entryMap uint32
 	// childMap is a bitmap indicating which of the 32 children exist.
+	// A collision node always has childMap==0.
 	childMap uint32
 	// entries are the key-value pair data items this node contains.
+	// A collision node keeps entries sorted without tracking in entryMap and always
+	// has len(entries)>0.
 	entries []kvEntry[K, V]
 	// children are the child nodes of this node.
+	// A collision node always has len(children)==0.
 	children []*KVNode[K, V]
 }
 
+// Get gets the value associated with the key.
+// Returns the value if found, and bool indicating whether it was found.
 func (node *KVNode[K, V]) Get(key K, hashSeed maphash.Seed) (V, bool) {
 	return node.get(key, maphash.Comparable(hashSeed, key), 1)
 }
 
-// Get gets the key with the given hash from this node.
-// The key is looked up from descendent nodes if necessary.
 func (node *KVNode[K, V]) get(key K, hash uint64, depth int) (V, bool) {
 	if depth == maxDepth {
 		// Max depth, must linear search to handle full hash collisions.
@@ -75,6 +85,9 @@ func (node *KVNode[K, V]) get(key K, hash uint64, depth int) (V, bool) {
 	return zero, false
 }
 
+// Insert associates the value with the key.
+// Returns the new node that replaces this node after insertion, and bool that is true if
+// the key is new (key did not already exist in the CHAMP).
 func (node *KVNode[K, V]) Insert(key K, value V, hashSeed maphash.Seed) (KVNode[K, V], bool) {
 	return node.insert(key, value, maphash.Comparable(hashSeed, key), hashSeed, 1)
 }
@@ -207,6 +220,9 @@ func (node *KVNode[K, V]) insert(key K, value V, hash uint64, hashSeed maphash.S
 	return result, true
 }
 
+// Delete deletes the key and its associated value from the map.
+// Returns the new node that replaces this node after insertion, and bool that is true if
+// anything was actually deleted.
 func (node *KVNode[K, V]) Delete(key K, hashSeed maphash.Seed) (KVNode[K, V], bool) {
 	return node.delete(key, maphash.Comparable(hashSeed, key), 1)
 }
@@ -310,6 +326,8 @@ func (node *KVNode[K, V]) delete(key K, hash uint64, depth int) (KVNode[K, V], b
 	return KVNode[K, V]{}, false
 }
 
+// Traverse traverses all key/value pairs and calls the yield() callback on each pair.
+// Exits early if yield(key, value) returns false.
 func (node *KVNode[K, V]) Traverse(yield func(K, V) bool) bool {
 	// If we are at a terminal collision node, ignore bitmaps and yield linearly
 	if node.entryMap == 0 && node.childMap == 0 && len(node.entries) > 0 {
@@ -343,6 +361,8 @@ func (node *KVNode[K, V]) Traverse(yield func(K, V) bool) bool {
 	return true
 }
 
+// Traverse traverses all keys and calls the yield() callback on each key.
+// Exits early if yield(key) returns false.
 func (node *KVNode[K, V]) TraverseKeys(yield func(K) bool) bool {
 	// If we are at a terminal collision node, ignore bitmaps and yield linearly
 	if node.entryMap == 0 && node.childMap == 0 && len(node.entries) > 0 {
@@ -376,6 +396,8 @@ func (node *KVNode[K, V]) TraverseKeys(yield func(K) bool) bool {
 	return true
 }
 
+// TraverseValues traverses all values and calls the yield() callback on each value.
+// Exits early if yield(value) returns false.
 func (node *KVNode[K, V]) TraverseValues(yield func(V) bool) bool {
 	// If we are at a terminal collision node, ignore bitmaps and yield linearly
 	if node.entryMap == 0 && node.childMap == 0 && len(node.entries) > 0 {
